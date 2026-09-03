@@ -5,7 +5,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
@@ -20,58 +19,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.gastos.data.local.entity.CategoriaEntity
 import com.example.gastos.data.local.entity.MovimientoEntity
 import com.example.gastos.data.local.entity.TipoMovimiento
 import com.example.gastos.ui.components.GestorCategoriasDialog
 import com.example.gastos.ui.viewmodel.MainViewModel
 import com.example.gastos.ui.viewmodel.UiState
-import org.tensorflow.lite.support.label.Category
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: MainViewModel) {
     val state by viewModel.uiState.collectAsState()
 
-    // Observamos los flujos de categorías expuestos en el ViewModel
     val categoriasGastos by viewModel.categoriasGastos.collectAsState()
     val categoriasIngresos by viewModel.categoriasIngresos.collectAsState()
 
     var mostrarDialogoMovimiento by remember { mutableStateOf(false) }
     var mostrarDialogoCategoria by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Mi Control de Gastos") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            )
-        },
-        floatingActionButton = {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Botón secundario: Crear Categoría
-                SmallFloatingActionButton(
-                    onClick = { mostrarDialogoCategoria = true },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Icon(Icons.Default.List, contentDescription = "Nueva categoría")                }
-
-                // Botón principal: Añadir Movimiento
-                FloatingActionButton(onClick = { mostrarDialogoMovimiento = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "Añadir movimiento")
-                }
-            }
-        }
-    ) { paddingValues ->
+    // Sin Scaffold anidado: Usamos una Box/Column directa
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
             // Selector para cambiar de Mes
             SelectorMesHeader(
@@ -88,6 +60,32 @@ fun HomeScreen(viewModel: MainViewModel) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Botones de Acción (Añadir movimiento y Gestionar Categorías)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = { mostrarDialogoMovimiento = true },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Nuevo Registro")
+                }
+
+                OutlinedButton(
+                    onClick = { mostrarDialogoCategoria = true }
+                ) {
+                    Icon(Icons.Default.List, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Categorías")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Text(
                 text = "Historial de Movimientos",
                 style = MaterialTheme.typography.titleMedium,
@@ -98,13 +96,18 @@ fun HomeScreen(viewModel: MainViewModel) {
 
             if (state.movimientos.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No hay movimientos en este mes. Toca '+' para añadir.")
+                    Text("No hay movimientos en este mes.", color = Color.Gray)
                 }
             } else {
                 LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f), // weight(1f) ajusta la lista exactamente al alto restante
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(state.movimientos, key = { it.id }) { movimiento ->
@@ -138,7 +141,7 @@ fun HomeScreen(viewModel: MainViewModel) {
         )
     }
 
-    // Diálogo para Crear Nueva Categoría
+    // Diálogo para Crear / Gestionar Categorías
     if (mostrarDialogoCategoria) {
         GestorCategoriasDialog(
             categoriasGastos = categoriasGastos,
@@ -250,8 +253,8 @@ fun MovimientoItem(movimiento: MovimientoEntity, onDelete: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NuevoMovimientoDialog(
-    categoriasGastos: List<com.example.gastos.data.local.entity.CategoriaEntity>,
-    categoriasIngresos: List<com.example.gastos.data.local.entity.CategoriaEntity>,
+    categoriasGastos: List<CategoriaEntity>,
+    categoriasIngresos: List<CategoriaEntity>,
     onDismiss: () -> Unit,
     onConfirm: (Double, TipoMovimiento, String, Long) -> Unit
 ) {
@@ -259,7 +262,6 @@ fun NuevoMovimientoDialog(
     var descripcion by remember { mutableStateOf("") }
     var tipoSeleccionado by remember { mutableStateOf(TipoMovimiento.GASTO) }
 
-    // Obtener la lista según el tipo seleccionado
     val categoriasDisponibles = if (tipoSeleccionado == TipoMovimiento.GASTO) categoriasGastos else categoriasIngresos
     var categoriaSeleccionadaId by remember(tipoSeleccionado, categoriasDisponibles) {
         mutableStateOf(categoriasDisponibles.firstOrNull()?.id ?: 1L)
@@ -272,7 +274,6 @@ fun NuevoMovimientoDialog(
         title = { Text("Nuevo Registro") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Selección Gasto / Ingreso
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     FilterChip(
                         selected = tipoSeleccionado == TipoMovimiento.GASTO,
@@ -286,7 +287,6 @@ fun NuevoMovimientoDialog(
                     )
                 }
 
-                // Campo Importe
                 OutlinedTextField(
                     value = importeText,
                     onValueChange = { importeText = it.replace(',', '.') },
@@ -296,7 +296,6 @@ fun NuevoMovimientoDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Dropdown Selector de Categoría
                 ExposedDropdownMenuBox(
                     expanded = menuCategoriaExpandido,
                     onExpandedChange = { menuCategoriaExpandido = !menuCategoriaExpandido }
@@ -328,7 +327,6 @@ fun NuevoMovimientoDialog(
                     }
                 }
 
-                // Campo Descripción
                 OutlinedTextField(
                     value = descripcion,
                     onValueChange = { descripcion = it },
