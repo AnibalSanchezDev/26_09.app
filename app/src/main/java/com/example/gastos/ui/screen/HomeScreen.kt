@@ -1,8 +1,10 @@
 package com.example.gastos.ui.screen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -33,10 +35,14 @@ fun HomeScreen(viewModel: MainViewModel) {
     val categoriasGastos by viewModel.categoriasGastos.collectAsState()
     val categoriasIngresos by viewModel.categoriasIngresos.collectAsState()
 
+    // Lista unificada para buscar la categoría de cada movimiento fácilmente
+    val todasLasCategorias = remember(categoriasGastos, categoriasIngresos) {
+        categoriasGastos + categoriasIngresos
+    }
+
     var mostrarDialogoMovimiento by remember { mutableStateOf(false) }
     var mostrarDialogoCategoria by remember { mutableStateOf(false) }
 
-    // Sin Scaffold anidado: Usamos una Box/Column directa
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -45,7 +51,6 @@ fun HomeScreen(viewModel: MainViewModel) {
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Selector para cambiar de Mes
             SelectorMesHeader(
                 mes = state.fechaFiltro.mes,
                 anio = state.fechaFiltro.anio,
@@ -55,12 +60,10 @@ fun HomeScreen(viewModel: MainViewModel) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Tarjeta con resumen de Saldo
             ResumenCard(state)
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Botones de Acción (Añadir movimiento y Gestionar Categorías)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -107,12 +110,13 @@ fun HomeScreen(viewModel: MainViewModel) {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f), // weight(1f) ajusta la lista exactamente al alto restante
+                        .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(state.movimientos, key = { it.id }) { movimiento ->
                         MovimientoItem(
                             movimiento = movimiento,
+                            categorias = todasLasCategorias, // 👈 Pasamos la lista aquí
                             onDelete = { viewModel.eliminarMovimiento(movimiento) }
                         )
                     }
@@ -121,7 +125,6 @@ fun HomeScreen(viewModel: MainViewModel) {
         }
     }
 
-    // Diálogo para Añadir Movimiento
     if (mostrarDialogoMovimiento) {
         NuevoMovimientoDialog(
             categoriasGastos = categoriasGastos,
@@ -141,7 +144,6 @@ fun HomeScreen(viewModel: MainViewModel) {
         )
     }
 
-    // Diálogo para Crear / Gestionar Categorías
     if (mostrarDialogoCategoria) {
         GestorCategoriasDialog(
             categoriasGastos = categoriasGastos,
@@ -216,8 +218,25 @@ fun ResumenCard(state: UiState) {
 }
 
 @Composable
-fun MovimientoItem(movimiento: MovimientoEntity, onDelete: () -> Unit) {
+fun MovimientoItem(
+    movimiento: MovimientoEntity,
+    categorias: List<CategoriaEntity>,
+    onDelete: () -> Unit
+) {
     val esIngreso = movimiento.tipo == TipoMovimiento.INGRESO
+
+    val categoriaAsociada = remember(movimiento.categoriaId, categorias) {
+        categorias.find { it.id == movimiento.categoriaId }
+    }
+
+    val colorCategoria = remember(categoriaAsociada) {
+        try {
+            Color(android.graphics.Color.parseColor(categoriaAsociada?.colorHex ?: "#808080"))
+        } catch (e: Exception) {
+            Color.Gray
+        }
+    }
+
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -229,20 +248,44 @@ fun MovimientoItem(movimiento: MovimientoEntity, onDelete: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = movimiento.descripcion.orEmpty().ifEmpty { if (esIngreso) "Ingreso" else "Gasto" },
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyLarge
                 )
-                Text(
-                    text = if (esIngreso) "Ingreso" else "Gasto",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Surface(
+                    shape = CircleShape,
+                    color = colorCategoria.copy(alpha = 0.15f),
+                    contentColor = colorCategoria
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(colorCategoria, CircleShape)
+                        )
+                        Text(
+                            text = categoriaAsociada?.nombre ?: "Sin categoría",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
+
             Text(
                 text = "${if (esIngreso) "+" else "-"}%.2f €".format(movimiento.importe),
                 color = if (esIngreso) Color(0xFF2E7D32) else Color(0xFFC62828),
                 fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
                 modifier = Modifier.padding(end = 8.dp)
             )
+
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Gray)
             }

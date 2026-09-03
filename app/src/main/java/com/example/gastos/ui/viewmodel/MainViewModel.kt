@@ -2,11 +2,13 @@ package com.example.gastos.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gastos.data.backup.BackupData
 import com.example.gastos.data.local.entity.CategoriaEntity
 import com.example.gastos.data.local.entity.MovimientoEntity
 import com.example.gastos.data.local.entity.TipoMovimiento
 import com.example.gastos.data.local.model.CategoriaResumen
 import com.example.gastos.data.repository.GastoRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -113,4 +115,31 @@ class MainViewModel(private val repository: GastoRepository) : ViewModel() {
             repository.borrarCategoria(categoria)
         }
     }
+    fun generarBackupJson(): String {
+        val datos = BackupData(
+            categorias = categoriasGastos.value + categoriasIngresos.value,
+            movimientos = uiState.value.movimientos
+        )
+        return com.google.gson.Gson().toJson(datos)
+    }
+
+    fun restaurarBackupJson(jsonString: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val backup = com.google.gson.Gson().fromJson(jsonString, BackupData::class.java)
+
+                // Cambia 'repository' por el nombre real de tu variable
+                backup.categorias.forEach { categoria ->
+                    repository.insertarCategoria(categoria) // O el nombre de tu función en el DAO
+                }
+
+                backup.movimientos.forEach { movimiento ->
+                    repository.insertarMovimiento(movimiento) // O el nombre de tu función en el DAO
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
 }

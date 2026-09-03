@@ -31,7 +31,7 @@ fun ResumenesScreen(viewModel: MainViewModel) {
     val state by viewModel.uiState.collectAsState()
     val categoriasGastos by viewModel.categoriasGastos.collectAsState()
 
-    // Filtramos solo movimientos de tipo GASTO del mes actual
+    // Filtramos los movimientos de tipo GASTO correspondientes al mes seleccionado en el ViewModel
     val gastosDelMes = remember(state.movimientos) {
         state.movimientos.filter { it.tipo == TipoMovimiento.GASTO }
     }
@@ -40,7 +40,7 @@ fun ResumenesScreen(viewModel: MainViewModel) {
         gastosDelMes.sumOf { it.importe }
     }
 
-    // Agrupamos el gasto por cada categoría
+    // Agrupamos y calculamos el porcentaje de cada categoría para el mes activo
     val resumenCategorias = remember(gastosDelMes, categoriasGastos) {
         categoriasGastos.mapNotNull { cat ->
             val totalCat = gastosDelMes
@@ -60,6 +60,14 @@ fun ResumenesScreen(viewModel: MainViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Selector de Mes sincronizado con el ViewModel global
+        SelectorMesHeader(
+            mes = state.fechaFiltro.mes,
+            anio = state.fechaFiltro.anio,
+            onMesAnterior = { viewModel.cambiarMes(-1) },
+            onMesSiguiente = { viewModel.cambiarMes(1) }
+        )
+
         Text(
             text = "Desglose de Gastos del Mes",
             style = MaterialTheme.typography.titleMedium,
@@ -118,7 +126,7 @@ fun ResumenesScreen(viewModel: MainViewModel) {
         if (resumenCategorias.isEmpty()) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
@@ -129,6 +137,9 @@ fun ResumenesScreen(viewModel: MainViewModel) {
             }
         } else {
             LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(resumenCategorias, key = { it.categoria.id }) { item ->
