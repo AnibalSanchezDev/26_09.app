@@ -59,6 +59,7 @@ dependencies {
     // --- BASE DE DATOS ROOM ---
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.litert.support.api)
     ksp(libs.androidx.room.compiler) // <-- Procesamiento con KSP habilitado
 
     // --- GRÁFICOS (VICO) ---

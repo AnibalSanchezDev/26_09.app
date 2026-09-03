@@ -14,6 +14,7 @@ ksp = "2.0.21-1.0.28"
 composeBom = "2024.10.01"
 room = "2.6.1"
 vico = "2.0.0-alpha.22"
+litertSupportApi = "1.4.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,6 +41,7 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vico" }
 vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
 vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = "vico" }
+litert-support-api = { group = "com.google.ai.edge.litert", name = "litert-support-api", version.ref = "litertSupportApi" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

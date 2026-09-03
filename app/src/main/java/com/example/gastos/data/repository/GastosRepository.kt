@@ -5,21 +5,22 @@ import com.example.gastos.data.local.dao.MovimientoDao
 import com.example.gastos.data.local.entity.CategoriaEntity
 import com.example.gastos.data.local.entity.MovimientoEntity
 import com.example.gastos.data.local.entity.TipoMovimiento
+import com.example.gastos.data.local.model.CategoriaResumen
 import kotlinx.coroutines.flow.Flow
 
-class GastosRepository(
+class GastoRepository(
     private val movimientoDao: MovimientoDao,
     private val categoriaDao: CategoriaDao
 ) {
-    // --- MOVIMIENTOS ---
-    val todosLosMovimientos: Flow<List<MovimientoEntity>> =
-        movimientoDao.obtenerTodosLosMovimientos()
 
-    val totalGastos: Flow<Double?> =
-        movimientoDao.obtenerTotalPorTipo(TipoMovimiento.GASTO)
+    fun obtenerMovimientosPorMes(mes: String, anio: String): Flow<List<MovimientoEntity>> =
+        movimientoDao.obtenerMovimientosPorMes(mes, anio)
 
-    val totalIngresos: Flow<Double?> =
-        movimientoDao.obtenerTotalPorTipo(TipoMovimiento.INGRESO)
+    fun obtenerTotalPorTipoYMes(tipo: TipoMovimiento, mes: String, anio: String): Flow<Double?> =
+        movimientoDao.obtenerTotalPorTipoYMes(tipo, mes, anio)
+
+    fun obtenerGastosPorCategoriaYMes(mes: String, anio: String): Flow<List<CategoriaResumen>> =
+        movimientoDao.obtenerGastosPorCategoriaYMes(mes, anio)
 
     suspend fun insertarMovimiento(movimiento: MovimientoEntity) {
         movimientoDao.insertarMovimiento(movimiento)
@@ -29,12 +30,18 @@ class GastosRepository(
         movimientoDao.borrarMovimiento(movimiento)
     }
 
-    // --- CATEGORÍAS ---
+    // Obtener categorías filtradas por tipo (GASTO o INGRESO)
     fun obtenerCategoriasPorTipo(tipo: TipoMovimiento): Flow<List<CategoriaEntity>> {
-        return categoriaDao.obtenerCategoriasPorTipo(tipo)
+        return categoriaDao.obtenerPorTipo(tipo)
     }
 
+    // Insertar nueva categoría
     suspend fun insertarCategoria(categoria: CategoriaEntity) {
-        categoriaDao.insertarCategoria(categoria)
+        categoriaDao.insertar(categoria)
+    }
+
+    // Borrar categoría
+    suspend fun borrarCategoria(categoria: CategoriaEntity) {
+        categoriaDao.borrar(categoria)
     }
 }

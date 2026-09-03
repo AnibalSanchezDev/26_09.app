@@ -1,88 +1,116 @@
 package com.example.gastos.ui.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gastos.data.local.AppDatabase
 import com.example.gastos.data.local.entity.CategoriaEntity
 import com.example.gastos.data.local.entity.MovimientoEntity
 import com.example.gastos.data.local.entity.TipoMovimiento
-import com.example.gastos.data.repository.GastosRepository
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import com.example.gastos.data.local.model.CategoriaResumen
+import com.example.gastos.data.repository.GastoRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.util.Collections.emptyList
+
+data class FechaFiltro(
+    val mes: String,  // Formato "01" - "12"
+    val anio: String  // Formato "YYYY"
+)
 
 data class UiState(
-    val movimientos: List<MovimientoEntity> = emptyList(),
+    val fechaFiltro: FechaFiltro = FechaFiltro(
+        mes = String.format("%02d", LocalDate.now().monthValue),
+        anio = LocalDate.now().year.toString()
+    ),
     val totalIngresos: Double = 0.0,
     val totalGastos: Double = 0.0,
     val saldoTotal: Double = 0.0,
-    val categoriasGasto: List<CategoriaEntity> = emptyList(),
-    val categoriasIngreso: List<CategoriaEntity> = emptyList()
+    val movimientos: List<MovimientoEntity> = emptyList(),
+    val gastosPorCategoria: List<CategoriaResumen> = emptyList(),
+
 )
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+@OptIn(ExperimentalCoroutinesApi::class)
+class MainViewModel(private val repository: GastoRepository) : ViewModel() {
 
-    private val repository: GastosRepository
-
-    val uiState: StateFlow<UiState>
-
-    init {
-        val db = AppDatabase.getDatabase(application)
-        repository = GastosRepository(db.movimientoDao(), db.categoriaDao())
-
-        val movimientosFlow = repository.todosLosMovimientos
-        val ingresosFlow = repository.totalIngresos
-        val gastosFlow = repository.totalGastos
-        val catGastosFlow = repository.obtenerCategoriasPorTipo(TipoMovimiento.GASTO)
-        val catIngresosFlow = repository.obtenerCategoriasPorTipo(TipoMovimiento.INGRESO)
-
-        uiState = combine(
-            movimientosFlow,
-            ingresosFlow,
-            gastosFlow,
-            catGastosFlow,
-            catIngresosFlow
-        ) { movs, ing, gast, cGastos, cIngresos ->
-            val totalIng = ing ?: 0.0
-            val totalGas = gast ?: 0.0
-            UiState(
-                movimientos = movs,
-                totalIngresos = totalIng,
-                totalGastos = totalGas,
-                saldoTotal = totalIng - totalGas,
-                categoriasGasto = cGastos,
-                categoriasIngreso = cIngresos
-            )
-        }.stateIn(
+    val categoriasGastos: StateFlow<List<CategoriaEntity>> = repository
+        .obtenerCategoriasPorTipo(TipoMovimiento.GASTO)
+        .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = UiState()
+            initialValue = emptyList()
+        )
+    val categoriasIngresos: StateFlow<List<CategoriaEntity>> = repository
+        .obtenerCategoriasPorTipo(TipoMovimiento.INGRESO)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+    private val _fechaFiltro = MutableStateFlow(
+        FechaFiltro(
+            mes = String.format("%02d", LocalDate.now().monthValue),
+            anio = LocalDate.now().year.toString()
+        )
+    )
+    val fechaFiltro: StateFlow<FechaFiltro> = _fechaFiltro.asStateFlow()
+
+    val uiState: StateFlow<UiState> = _fechaFiltro.flatMapLatest { filtro ->
+        combine(
+            repository.obtenerMovimientosPorMes(filtro.mes, filtro.anio),
+            repository.obtenerTotalPorTipoYMes(TipoMovimiento.INGRESO, filtro.mes, filtro.anio),
+            repository.obtenerTotalPorTipoYMes(TipoMovimiento.GASTO, filtro.mes, filtro.anio),
+            repository.obtenerGastosPorCategoriaYMes(filtro.mes, filtro.anio)
+        ) { movimientos, ingresos, gastos, categorias ->
+            val totalIngresos = ingresos ?: 0.0
+            val totalGastos = gastos ?: 0.0
+            UiState(
+                fechaFiltro = filtro,
+                totalIngresos = totalIngresos,
+                totalGastos = totalGastos,
+                saldoTotal = totalIngresos - totalGastos,
+                movimientos = movimientos,
+                gastosPorCategoria = categorias
+            )
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = UiState()
+    )
+
+    fun cambiarMes(deltaMeses: Long) {
+        val actual = LocalDate.of(_fechaFiltro.value.anio.toInt(), _fechaFiltro.value.mes.toInt(), 1)
+        val nuevaFecha = actual.plusMonths(deltaMeses)
+        _fechaFiltro.value = FechaFiltro(
+            mes = String.format("%02d", nuevaFecha.monthValue),
+            anio = nuevaFecha.year.toString()
         )
     }
 
-    fun agregarMovimiento(
-        importe: Double,
-        tipo: TipoMovimiento,
-        descripcion: String?,
-        categoriaId: Long
-    ) {
+    fun agregarMovimiento(movimiento: MovimientoEntity) {
         viewModelScope.launch {
-            val nuevoMovimiento = MovimientoEntity(
-                importe = importe,
-                tipo = tipo,
-                descripcion = descripcion?.ifBlank { null },
-                categoriaId = categoriaId
-            )
-            repository.insertarMovimiento(nuevoMovimiento)
+            repository.insertarMovimiento(movimiento)
         }
     }
 
     fun eliminarMovimiento(movimiento: MovimientoEntity) {
         viewModelScope.launch {
             repository.borrarMovimiento(movimiento)
+        }
+    }
+
+    // Función para guardar una nueva categoría
+    fun guardarCategoria(categoria: CategoriaEntity) {
+        viewModelScope.launch {
+            repository.insertarCategoria(categoria)
+        }
+    }
+
+    fun borrarCategoria(categoria: CategoriaEntity) {
+        viewModelScope.launch {
+            repository.borrarCategoria(categoria)
         }
     }
 }

@@ -30,4 +30,13 @@ interface CategoriaDao {
 
     @Query("SELECT * FROM categorias WHERE usuarioId = :usuarioId ORDER BY nombre ASC")
     fun obtenerTodasLasCategorias(usuarioId: String = "default_user"): Flow<List<CategoriaEntity>>
+
+    @Query("SELECT * FROM categorias WHERE tipo = :tipo")
+    fun obtenerPorTipo(tipo: TipoMovimiento): Flow<List<CategoriaEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertar(categoria: CategoriaEntity)
+
+    @Delete
+    suspend fun borrar(categoria: CategoriaEntity)
 }

@@ -5,8 +5,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,14 +22,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gastos.data.local.entity.MovimientoEntity
 import com.example.gastos.data.local.entity.TipoMovimiento
+import com.example.gastos.ui.components.GestorCategoriasDialog
 import com.example.gastos.ui.viewmodel.MainViewModel
 import com.example.gastos.ui.viewmodel.UiState
+import org.tensorflow.lite.support.label.Category
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: MainViewModel) {
     val state by viewModel.uiState.collectAsState()
-    var mostrarDialogo by remember { mutableStateOf(false) }
+
+    // Observamos los flujos de categorías expuestos en el ViewModel
+    val categoriasGastos by viewModel.categoriasGastos.collectAsState()
+    val categoriasIngresos by viewModel.categoriasIngresos.collectAsState()
+
+    var mostrarDialogoMovimiento by remember { mutableStateOf(false) }
+    var mostrarDialogoCategoria by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -37,8 +49,21 @@ fun HomeScreen(viewModel: MainViewModel) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { mostrarDialogo = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir movimiento")
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Botón secundario: Crear Categoría
+                SmallFloatingActionButton(
+                    onClick = { mostrarDialogoCategoria = true },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Icon(Icons.Default.List, contentDescription = "Nueva categoría")                }
+
+                // Botón principal: Añadir Movimiento
+                FloatingActionButton(onClick = { mostrarDialogoMovimiento = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "Añadir movimiento")
+                }
             }
         }
     ) { paddingValues ->
@@ -48,6 +73,16 @@ fun HomeScreen(viewModel: MainViewModel) {
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
+            // Selector para cambiar de Mes
+            SelectorMesHeader(
+                mes = state.fechaFiltro.mes,
+                anio = state.fechaFiltro.anio,
+                onMesAnterior = { viewModel.cambiarMes(-1) },
+                onMesSiguiente = { viewModel.cambiarMes(1) }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             // Tarjeta con resumen de Saldo
             ResumenCard(state)
 
@@ -66,7 +101,7 @@ fun HomeScreen(viewModel: MainViewModel) {
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No hay movimientos registrados. Toca '+' para añadir.")
+                    Text("No hay movimientos en este mes. Toca '+' para añadir.")
                 }
             } else {
                 LazyColumn(
@@ -83,15 +118,65 @@ fun HomeScreen(viewModel: MainViewModel) {
         }
     }
 
-    if (mostrarDialogo) {
+    // Diálogo para Añadir Movimiento
+    if (mostrarDialogoMovimiento) {
         NuevoMovimientoDialog(
-            state = state,
-            onDismiss = { mostrarDialogo = false },
+            categoriasGastos = categoriasGastos,
+            categoriasIngresos = categoriasIngresos,
+            onDismiss = { mostrarDialogoMovimiento = false },
             onConfirm = { importe, tipo, descripcion, categoriaId ->
-                viewModel.agregarMovimiento(importe, tipo, descripcion, categoriaId)
-                mostrarDialogo = false
+                val nuevoMovimiento = MovimientoEntity(
+                    importe = importe,
+                    tipo = tipo,
+                    descripcion = descripcion,
+                    categoriaId = categoriaId,
+                    fechaTimestamp = System.currentTimeMillis()
+                )
+                viewModel.agregarMovimiento(nuevoMovimiento)
+                mostrarDialogoMovimiento = false
             }
         )
+    }
+
+    // Diálogo para Crear Nueva Categoría
+    if (mostrarDialogoCategoria) {
+        GestorCategoriasDialog(
+            categoriasGastos = categoriasGastos,
+            categoriasIngresos = categoriasIngresos,
+            onDismiss = { mostrarDialogoCategoria = false },
+            onGuardar = { categoria ->
+                viewModel.guardarCategoria(categoria)
+            },
+            onBorrar = { categoria ->
+                viewModel.borrarCategoria(categoria)
+            }
+        )
+    }
+}
+
+@Composable
+fun SelectorMesHeader(
+    mes: String,
+    anio: String,
+    onMesAnterior: () -> Unit,
+    onMesSiguiente: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onMesAnterior) {
+            Icon(Icons.Default.ArrowBack, contentDescription = "Mes anterior")
+        }
+        Text(
+            text = "$mes / $anio",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+        IconButton(onClick = onMesSiguiente) {
+            Icon(Icons.Default.ArrowForward, contentDescription = "Mes siguiente")
+        }
     }
 }
 
@@ -102,7 +187,7 @@ fun ResumenCard(state: UiState) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Saldo Total", fontSize = 14.sp)
+            Text("Saldo del Mes", fontSize = 14.sp)
             Text(
                 text = "%.2f €".format(state.saldoTotal),
                 fontSize = 28.sp,
@@ -140,7 +225,7 @@ fun MovimientoItem(movimiento: MovimientoEntity, onDelete: () -> Unit) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = movimiento.descripcion ?: if (esIngreso) "Ingreso" else "Gasto",
+                    text = movimiento.descripcion.orEmpty().ifEmpty { if (esIngreso) "Ingreso" else "Gasto" },
                     fontWeight = FontWeight.Bold
                 )
                 Text(
@@ -162,9 +247,11 @@ fun MovimientoItem(movimiento: MovimientoEntity, onDelete: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NuevoMovimientoDialog(
-    state: UiState,
+    categoriasGastos: List<com.example.gastos.data.local.entity.CategoriaEntity>,
+    categoriasIngresos: List<com.example.gastos.data.local.entity.CategoriaEntity>,
     onDismiss: () -> Unit,
     onConfirm: (Double, TipoMovimiento, String, Long) -> Unit
 ) {
@@ -172,17 +259,20 @@ fun NuevoMovimientoDialog(
     var descripcion by remember { mutableStateOf("") }
     var tipoSeleccionado by remember { mutableStateOf(TipoMovimiento.GASTO) }
 
-    val categoriasActuales = if (tipoSeleccionado == TipoMovimiento.GASTO) state.categoriasGasto else state.categoriasIngreso
-    var categoriaSeleccionadaId by remember(tipoSeleccionado) {
-        mutableStateOf(categoriasActuales.firstOrNull()?.id ?: 1L)
+    // Obtener la lista según el tipo seleccionado
+    val categoriasDisponibles = if (tipoSeleccionado == TipoMovimiento.GASTO) categoriasGastos else categoriasIngresos
+    var categoriaSeleccionadaId by remember(tipoSeleccionado, categoriasDisponibles) {
+        mutableStateOf(categoriasDisponibles.firstOrNull()?.id ?: 1L)
     }
+
+    var menuCategoriaExpandido by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Nuevo Registro") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Selector de Tipo: Gasto o Ingreso
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Selección Gasto / Ingreso
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     FilterChip(
                         selected = tipoSeleccionado == TipoMovimiento.GASTO,
@@ -196,6 +286,7 @@ fun NuevoMovimientoDialog(
                     )
                 }
 
+                // Campo Importe
                 OutlinedTextField(
                     value = importeText,
                     onValueChange = { importeText = it.replace(',', '.') },
@@ -205,6 +296,39 @@ fun NuevoMovimientoDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // Dropdown Selector de Categoría
+                ExposedDropdownMenuBox(
+                    expanded = menuCategoriaExpandido,
+                    onExpandedChange = { menuCategoriaExpandido = !menuCategoriaExpandido }
+                ) {
+                    val categoriaActualNombre = categoriasDisponibles.find { it.id == categoriaSeleccionadaId }?.nombre ?: "Seleccionar Categoría"
+                    OutlinedTextField(
+                        value = categoriaActualNombre,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Categoría") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuCategoriaExpandido) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = menuCategoriaExpandido,
+                        onDismissRequest = { menuCategoriaExpandido = false }
+                    ) {
+                        categoriasDisponibles.forEach { cat ->
+                            DropdownMenuItem(
+                                text = { Text(cat.nombre) },
+                                onClick = {
+                                    categoriaSeleccionadaId = cat.id
+                                    menuCategoriaExpandido = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Campo Descripción
                 OutlinedTextField(
                     value = descripcion,
                     onValueChange = { descripcion = it },
