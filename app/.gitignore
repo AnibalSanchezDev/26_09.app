@@ -1,0 +1,28 @@
+# Gradle files
+.gradle/
+build/
+/*/build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log Files
+*.log
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+.DS_Store
+
+# Captures / Memory Dumps
+*.hprof
+
+# Android Studio Navigation / Layout editor state
+captures/
+
+# Keystore files (NUNCA subir claves de firma)
+*.jks
+*.keystore
+
+# Signing files
+google-services.json
