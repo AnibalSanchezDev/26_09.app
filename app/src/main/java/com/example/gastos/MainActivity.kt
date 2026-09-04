@@ -21,8 +21,9 @@ class MainActivity : ComponentActivity() {
 
                 // 2. Crea el repositorio pasándole movimientoDao
                 val repository = GastoRepository(
+                    categoriaDao = database.categoriaDao(),
                     movimientoDao = database.movimientoDao(),
-                    categoriaDao = database.categoriaDao()
+                    cuentaDao = database.cuentaDao() // 👈 Añade esto aquí
                 )
 
                 // 3. Retornamos la instancia de MainViewModel

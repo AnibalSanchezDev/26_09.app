@@ -111,6 +111,7 @@ fun MainContainerScreen(viewModel: MainViewModel) {
                     SeccionApp.INICIO -> InicioScreen(viewModel = viewModel)
                     SeccionApp.GESTION -> HomeScreen(viewModel = viewModel)
                     SeccionApp.RESUMENES -> ResumenesScreen(viewModel = viewModel)
+                    SeccionApp.CUENTAS -> CuentasScreen(viewModel = viewModel)
                 }
             }
         }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gastos.data.backup.BackupData
 import com.example.gastos.data.local.entity.CategoriaEntity
+import com.example.gastos.data.local.entity.CuentaEntity
 import com.example.gastos.data.local.entity.MovimientoEntity
 import com.example.gastos.data.local.entity.TipoMovimiento
 import com.example.gastos.data.local.model.CategoriaResumen
@@ -34,7 +35,8 @@ data class UiState(
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class MainViewModel(private val repository: GastoRepository) : ViewModel() {
+class MainViewModel(
+    private val repository: GastoRepository) : ViewModel() {
 
     val categoriasGastos: StateFlow<List<CategoriaEntity>> = repository
         .obtenerCategoriasPorTipo(TipoMovimiento.GASTO)
@@ -136,6 +138,103 @@ class MainViewModel(private val repository: GastoRepository) : ViewModel() {
                 backup.movimientos.forEach { movimiento ->
                     repository.insertarMovimiento(movimiento) // O el nombre de tu función en el DAO
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+    val cuentas: StateFlow<List<CuentaEntity>> = repository
+        .obtenerCuentas() // 👈 Esto es lo que hace que se use la función del repositorio
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    fun agregarCuenta(
+        nombre: String,
+        saldoInicial: Double,
+        esInversion: Boolean,
+        capitalInvertido: Double,
+        esPrincipal: Boolean = false // 👈 Añade este parámetro aquí
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cuenta = CuentaEntity(
+                nombre = nombre,
+                saldoActual = saldoInicial,
+                esInversion = esInversion,
+                capitalInicialInvertido = if (esInversion) capitalInvertido else 0.0,
+                esPrincipal = esPrincipal // 👈 Asígnaselo a la entidad
+            )
+
+            // Si marcas esta como principal, opcionalmente puedes desmarcar las demás antes:
+            if (esPrincipal) {
+                repository.quitarTodasPrincipales()
+            }
+
+            repository.insertarCuenta(cuenta)
+        }
+    }
+    fun actualizarSaldoInversion(cuentaId: Long, nuevoSaldo: Double) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.actualizarSaldoCuenta(cuentaId, nuevoSaldo) // 👈 Usamos 'repository'
+        }
+    }
+
+    fun agregarAportacionInversion(cuentaId: Long, importe: Double) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.sumarAportacion(cuentaId, importe)
+        }
+    }
+
+    fun borrarCuenta(cuentaId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.borrarCuentaPorId(cuentaId)
+        }
+    }
+
+    fun registrarMovimiento(
+        importe: Double,
+        tipo: TipoMovimiento,
+        descripcion: String?,
+        categoriaId: Long,
+        cuentaId: Long
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.insertarMovimiento(
+                    MovimientoEntity(
+                        importe = importe,
+                        tipo = tipo,
+                        descripcion = descripcion,
+                        fechaTimestamp = System.currentTimeMillis(),
+                        categoriaId = categoriaId,
+                        cuentaId = cuentaId
+                    )
+                )
+
+                when (tipo) {
+                    TipoMovimiento.GASTO -> repository.restarSaldoCuenta(cuentaId, importe)
+                    TipoMovimiento.INGRESO -> repository.sumarSaldoCuenta(cuentaId, importe)
+                }
+            } catch (e: Exception) {
+                // Loguea el error real en tu consola de depuración para identificar la causa exacta
+                e.printStackTrace()
+            }
+        }
+    }
+    fun establecerCuentaPrincipal(cuentaId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Asegúrate de que pasas por el repositorio si así está diseñada tu arquitectura:
+            repository.quitarTodasPrincipales()
+            repository.marcarComoPrincipal(cuentaId)
+        }
+    }
+    fun realizarTransferencia(origenId: Long, destinoId: Long, importe: Double) {
+        if (origenId == destinoId || importe <= 0) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.transferirEntreCuentas(origenId, destinoId, importe)
             } catch (e: Exception) {
                 e.printStackTrace()
             }

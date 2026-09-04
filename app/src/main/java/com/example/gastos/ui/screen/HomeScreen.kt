@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gastos.data.local.entity.CategoriaEntity
+import com.example.gastos.data.local.entity.CuentaEntity
 import com.example.gastos.data.local.entity.MovimientoEntity
 import com.example.gastos.data.local.entity.TipoMovimiento
 import com.example.gastos.ui.components.GestorCategoriasDialog
@@ -34,8 +35,8 @@ fun HomeScreen(viewModel: MainViewModel) {
 
     val categoriasGastos by viewModel.categoriasGastos.collectAsState()
     val categoriasIngresos by viewModel.categoriasIngresos.collectAsState()
+    val cuentas by viewModel.cuentas.collectAsState()
 
-    // Lista unificada para buscar la categoría de cada movimiento fácilmente
     val todasLasCategorias = remember(categoriasGastos, categoriasIngresos) {
         categoriasGastos + categoriasIngresos
     }
@@ -116,7 +117,7 @@ fun HomeScreen(viewModel: MainViewModel) {
                     items(state.movimientos, key = { it.id }) { movimiento ->
                         MovimientoItem(
                             movimiento = movimiento,
-                            categorias = todasLasCategorias, // 👈 Pasamos la lista aquí
+                            categorias = todasLasCategorias,
                             onDelete = { viewModel.eliminarMovimiento(movimiento) }
                         )
                     }
@@ -129,16 +130,16 @@ fun HomeScreen(viewModel: MainViewModel) {
         NuevoMovimientoDialog(
             categoriasGastos = categoriasGastos,
             categoriasIngresos = categoriasIngresos,
+            cuentas = cuentas,
             onDismiss = { mostrarDialogoMovimiento = false },
-            onConfirm = { importe, tipo, descripcion, categoriaId ->
-                val nuevoMovimiento = MovimientoEntity(
+            onConfirm = { importe, tipo, descripcion, categoriaId, cuentaId ->
+                viewModel.registrarMovimiento(
                     importe = importe,
                     tipo = tipo,
-                    descripcion = descripcion,
+                    descripcion = descripcion.ifBlank { null },
                     categoriaId = categoriaId,
-                    fechaTimestamp = System.currentTimeMillis()
+                    cuentaId = cuentaId
                 )
-                viewModel.agregarMovimiento(nuevoMovimiento)
                 mostrarDialogoMovimiento = false
             }
         )
@@ -298,8 +299,9 @@ fun MovimientoItem(
 fun NuevoMovimientoDialog(
     categoriasGastos: List<CategoriaEntity>,
     categoriasIngresos: List<CategoriaEntity>,
+    cuentas: List<CuentaEntity>,
     onDismiss: () -> Unit,
-    onConfirm: (Double, TipoMovimiento, String, Long) -> Unit
+    onConfirm: (Double, TipoMovimiento, String, Long, Long) -> Unit
 ) {
     var importeText by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
@@ -310,7 +312,16 @@ fun NuevoMovimientoDialog(
         mutableStateOf(categoriasDisponibles.firstOrNull()?.id ?: 1L)
     }
 
+    // Cuenta principal por defecto o la primera disponible
+    val cuentaPorDefecto = remember(cuentas) {
+        cuentas.firstOrNull { it.esPrincipal } ?: cuentas.firstOrNull()
+    }
+    var cuentaSeleccionadaId by remember(cuentaPorDefecto) {
+        mutableStateOf(cuentaPorDefecto?.id ?: 1L)
+    }
+
     var menuCategoriaExpandido by remember { mutableStateOf(false) }
+    var menuCuentaExpandido by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -339,6 +350,39 @@ fun NuevoMovimientoDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // Selector de Cuenta
+                ExposedDropdownMenuBox(
+                    expanded = menuCuentaExpandido,
+                    onExpandedChange = { menuCuentaExpandido = !menuCuentaExpandido }
+                ) {
+                    val cuentaActualNombre = cuentas.find { it.id == cuentaSeleccionadaId }?.nombre ?: "Seleccionar Cuenta"
+                    OutlinedTextField(
+                        value = cuentaActualNombre,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Cuenta asociada") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuCuentaExpandido) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = menuCuentaExpandido,
+                        onDismissRequest = { menuCuentaExpandido = false }
+                    ) {
+                        cuentas.forEach { cuenta ->
+                            DropdownMenuItem(
+                                text = { Text("${cuenta.nombre} ${if (cuenta.esPrincipal) "★" else ""}") },
+                                onClick = {
+                                    cuentaSeleccionadaId = cuenta.id
+                                    menuCuentaExpandido = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Selector de Categoría
                 ExposedDropdownMenuBox(
                     expanded = menuCategoriaExpandido,
                     onExpandedChange = { menuCategoriaExpandido = !menuCategoriaExpandido }
@@ -384,7 +428,7 @@ fun NuevoMovimientoDialog(
                 onClick = {
                     val importe = importeText.toDoubleOrNull()
                     if (importe != null && importe > 0) {
-                        onConfirm(importe, tipoSeleccionado, descripcion, categoriaSeleccionadaId)
+                        onConfirm(importe, tipoSeleccionado, descripcion, categoriaSeleccionadaId, cuentaSeleccionadaId)
                     }
                 }
             ) {
